@@ -1,175 +1,191 @@
-# PES-VCS Lab Report
+# OS Orange -4 Lab Report: PES-VCS
 
-- SRN: PES1UG24CS560
-- Platform: Ubuntu 22.04
-- Author configuration used:
-  - `export PES_AUTHOR="Your Name <PES1UG24CS560>"`
+Name: Balaraj R  
+SRN: PES1UG24CS560  
+Assignment: OS Orange -4  
+Platform: Ubuntu 22.04
 
-## Code Completion Summary
+## 1. Objective
+
+This assignment implements a local version control system (PES-VCS) with:
+
+- content-addressable object storage,
+- tree snapshot construction,
+- staging index management,
+- commit creation and history traversal,
+- verification through unit and integration tests.
+
+## 2. Implementation Summary
 
 Implemented all required TODO functions:
 
-- `object.c`
-  - `object_write`
-  - `object_read`
-- `tree.c`
-  - `tree_from_index`
-- `index.c`
-  - `index_load`
-  - `index_save`
-  - `index_add`
-- `commit.c`
-  - `commit_create`
+- object.c
+  - object_write
+  - object_read
+- tree.c
+  - tree_from_index
+- index.c
+  - index_load
+  - index_save
+  - index_add
+- commit.c
+  - commit_create
 
-## Verification Artifacts
+## 3. Screenshot Evidence
 
-The following files contain command outputs for each required screenshot checkpoint:
+### 1A. Phase 1 Unit Test (./test_objects)
 
-- Screenshot 1A: `phase1_test_objects.out`
-- Screenshot 1B: `phase1_objects.out`
-- Screenshot 2A: `phase2_test_tree.out`
-- Screenshot 2B: `phase2_tree_xxd.out`
-- Screenshot 3A: `phase3_sequence.out`
-- Screenshot 3B: `phase3_index.out`
-- Screenshot 4A: `phase4_log.out`
-- Screenshot 4B: `phase4_files.out`
-- Screenshot 4C: `phase4_refs.out`
-- Final integration: `final_integration.out`
+![1A Phase 1 test_objects](screenshoot/1A_phase1_test_objects.png)
 
-## Notes on Integration Test Path
+### 1B. Sharded Object Storage (find .pes/objects -type f)
 
-`test_sequence.sh` computes an absolute binary path and executes `$PES` without quotes.
-If the repository path has spaces, the script can fail due to shell word splitting.
-Validation was done from a no-space symlink path to run the provided script unchanged.
+![1B Sharded object files](screenshoot/1B_phase1_objects_sharded.png)
 
-## Analysis Answers
+### 2A. Phase 2 Unit Test (./test_tree)
 
-### Q5.1: How to implement `pes checkout <branch>`
+![2A Phase 2 test_tree](screenshoot/2A_phase2_test_tree.png)
 
-Files to update in `.pes/`:
+### 2B. Raw Tree Object Binary Format (xxd ... | head -20)
 
-1. Resolve target commit:
-   - Read `.pes/refs/heads/<branch>` to get target commit hash.
-2. Update `HEAD`:
-   - If normal branch checkout, write `ref: refs/heads/<branch>` into `.pes/HEAD`.
-   - If checkout by hash, write raw commit hash (detached HEAD).
-3. Update index:
-   - Rebuild `.pes/index` so it matches the checked-out tree snapshot.
+![2B Raw tree xxd](screenshoot/2B_phase2_tree_xxd.png)
 
-Working directory actions:
+### 3A. pes init + pes add + pes status
 
-1. Read target commit object and its root tree.
-2. Materialize the entire tree into working directory files:
-   - Create directories as needed.
-   - Write blob contents to files.
-   - Set executable bit according to mode (`100755`).
-3. Remove tracked files/directories present in current snapshot but absent in target snapshot.
+![3A Phase 3 init add status](screenshoot/3A_phase3_init_add_status.png)
 
-Why checkout is complex:
+### 3B. Index Text Format (cat .pes/index)
 
-- It is a 3-way state transition across:
-  - current working directory,
-  - current index,
-  - target commit tree.
-- It must detect overwrite risks (uncommitted changes).
-- It must handle deletes, mode changes, nested trees, and conflicts atomically or safely roll back.
+![3B Phase 3 index text](screenshoot/3B_phase3_index_text.png)
 
-### Q5.2: Detect dirty working-directory conflicts with index + object store
+### 4A. Commit History (./pes log with three commits)
 
-Goal: refuse checkout when local uncommitted changes would be overwritten by switching branches.
+![4A Phase 4 log output](screenshoot/4A_phase4_log_three_commits.png)
 
-Algorithm:
+### 4B. Object Store Growth (find .pes -type f | sort)
 
-1. Build map A: current index entries (`path -> staged hash, mode, metadata`).
-2. Build map B: current `HEAD` tree entries by recursively reading tree/blob hashes from object store.
-3. Build map C: target branch tree entries (same recursive traversal).
-4. For each tracked path in union of A and B:
-   - Compute working-copy state for that path:
-     - If file missing -> state = deleted.
-     - Else compare stat metadata with index metadata.
-     - If metadata differs, re-hash file and compare with index hash to confirm true content change.
-   - Path is "dirty" if working file differs from index entry.
-5. Conflict rule:
-   - If path is dirty AND target version (`C[path]`) differs from current committed version (`B[path]`), refuse checkout.
-   - Also refuse when path is dirty and path would be deleted/created in target in a way that overwrites local data.
+![4B Phase 4 object growth](screenshoot/4B_phase4_find_pes_files.png)
 
-This uses only:
+### 4C. Reference Chain (cat .pes/refs/heads/main and cat .pes/HEAD)
 
-- index metadata + staged hashes,
-- object store trees/blobs for current and target snapshots.
+![4C Phase 4 refs and HEAD](screenshoot/4C_phase4_refs_head.png)
+
+### Final Integration Test (make test-integration)
+
+![Final integration output part 1](screenshoot/Final_integration_part1.png)
+
+![Final integration output part 2](screenshoot/Final_integration_part2.png)
+
+## 4. Analysis Answers
+
+### Q5.1: How would pes checkout <branch> work?
+
+A branch is a ref file in .pes/refs/heads storing a commit hash.
+
+To implement checkout:
+
+1. Resolve the target commit hash from .pes/refs/heads/<branch>.
+2. Update .pes/HEAD to point to ref: refs/heads/<branch> (or hash for detached checkout).
+3. Read target commit -> target tree.
+4. Rewrite working directory to match target tree:
+   - create/update files from blobs,
+   - create/remove directories,
+   - apply modes (100644 or 100755),
+   - remove tracked paths not present in target tree.
+5. Rewrite .pes/index so staged state matches checked-out snapshot.
+
+Why complex:
+
+- Must safely coordinate HEAD, index, and working directory updates.
+- Must avoid overwriting local uncommitted work.
+- Must handle deletes, nested trees, and mode changes atomically.
+
+### Q5.2: Detect dirty working directory conflicts using index + object store
+
+Use three snapshots:
+
+- A: index entries (path -> staged blob hash + metadata)
+- B: current HEAD tree (from object store)
+- C: target branch tree (from object store)
+
+Conflict detection:
+
+1. For each tracked path in union(A, B), inspect working directory file.
+2. If missing or metadata differs from index entry, confirm by hashing file and comparing with A[path].hash.
+3. Mark path dirty if working file != staged/index version.
+4. If dirty path would change between current and target (B[path] != C[path], or present/deleted mismatch), refuse checkout.
+
+This prevents local changes from being overwritten by branch switching.
 
 ### Q5.3: Detached HEAD behavior and recovery
 
-Detached HEAD means `.pes/HEAD` contains a commit hash directly, not a branch ref.
+Detached HEAD means .pes/HEAD stores a commit hash directly, not a branch ref.
 
 If commits are made in detached state:
 
-1. New commits are created normally.
-2. Parent chain continues from detached commit.
-3. No branch pointer moves to the new commits.
+- commits are created normally,
+- parent chain is valid,
+- but no branch pointer advances.
 
-Result:
+These commits can become unreachable once HEAD moves away.
 
-- Commits are reachable only from HEAD temporarily.
-- Once HEAD moves elsewhere, these commits can become unreachable and later eligible for GC.
+Recovery:
 
-Recovery methods:
+- create a branch ref pointing to that detached commit hash
+  (write hash into .pes/refs/heads/<new-branch>) before GC.
 
-1. Immediately create a branch at the detached commit:
-   - Write hash to `.pes/refs/heads/<new-branch>`.
-2. Or later recover from reflog-like history (if implemented) or from manual hash inspection before GC.
+### Q6.1: Algorithm for garbage collection of unreachable objects
 
-### Q6.1: Find and delete unreachable objects
+Use mark-and-sweep.
 
-Mark-and-sweep algorithm:
+Mark phase:
 
-1. Roots:
-   - All branch tips in `.pes/refs/heads/*`.
-   - Optionally detached HEAD commit if it is a raw hash.
-2. Mark phase:
-   - DFS/BFS from each root commit.
-   - For commit objects:
-     - mark commit hash,
-     - traverse `parent` (if any),
-     - traverse `tree`.
-   - For tree objects:
-     - mark tree hash,
-     - for each entry:
-       - if subtree, traverse child tree hash,
-       - if blob, mark blob hash.
-3. Sweep phase:
-   - Scan `.pes/objects/*/*`.
-   - Convert file path to object hash.
-   - Delete object file if hash is not in marked set.
+1. Start from all refs in .pes/refs/heads/* (and detached HEAD hash, if any).
+2. Traverse commits recursively:
+   - mark commit hash,
+   - traverse parent,
+   - traverse commit tree.
+3. Traverse tree objects recursively:
+   - mark tree hash,
+   - mark blob hashes,
+   - recurse into subtree hashes.
+
+Sweep phase:
+
+1. Scan all .pes/objects/*/* files.
+2. Convert path to object hash.
+3. Delete objects not in reachable set.
 
 Data structure:
 
-- Hash set of 32-byte hashes (or 64-char hex keys) for O(1) expected membership checks.
-- Queue/stack for traversal.
+- hash set for reachable hashes (O(1) expected lookup).
+- stack/queue for DFS/BFS traversal.
 
-Estimated visited objects for 100,000 commits and 50 branches:
+Scale estimate for 100,000 commits and 50 branches:
 
-- Upper bound branches add little if histories overlap.
-- Commits visited: about 100,000 unique commits.
-- Trees: roughly one root tree per commit plus subtrees, often reused; commonly around 100,000 to 300,000.
-- Blobs: highly workload dependent; often several hundred thousand to a few million unique blobs.
-
-So practical traversal is typically on the order of a few hundred thousand to a few million objects, not `100000 * 50`, because shared history is visited once.
+- typically near unique reachable history, not 100,000 x 50,
+- about 100,000 commit objects plus corresponding reachable trees/blobs,
+- usually hundreds of thousands to a few million total reachable objects depending on file churn.
 
 ### Q6.2: Why concurrent GC with commit is dangerous
 
 Race example:
 
-1. Commit process writes new blob/tree objects first.
-2. Before it writes commit object and updates branch ref, these new objects are not reachable from any ref.
-3. Concurrent GC runs mark phase from current refs and does not mark those new objects.
-4. GC sweep deletes those "unreachable" objects.
-5. Commit process then writes commit object referencing now-deleted objects and updates ref.
-6. Repository now has a broken commit pointing to missing tree/blob objects.
+1. Commit process writes new blobs/trees first.
+2. Before commit ref update, these objects are temporarily unreachable from refs.
+3. Concurrent GC marks from current refs and misses those new objects.
+4. GC sweep deletes them.
+5. Commit object is then written/updated to reference deleted objects.
+
+Result: broken commit graph with missing objects.
 
 How Git avoids this:
 
-1. Uses lock files and coordinated ref updates.
-2. Uses conservative GC policies (grace periods, prune windows) so very recent loose objects are not immediately pruned.
-3. Packs and references are handled with additional safety around object visibility and atomicity.
-4. GC and write operations are designed to avoid deleting objects that might still be in-flight.
+- uses locking and coordinated updates around refs,
+- uses conservative pruning windows (do not immediately prune recent loose objects),
+- manages pack/visibility safely to avoid deleting in-flight objects.
+
+## 5. Notes
+
+- Integration test script path issue with spaces was handled by running from a no-space symlink path:
+  - /tmp/pesvcs-nospace/repo
+- This preserves provided files unchanged while allowing successful execution.
